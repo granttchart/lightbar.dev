@@ -1,17 +1,17 @@
 <template>
   <main
-    class="container"
+    class="container m-auto flex flex-col"
     id="emdr-app"
-    style="{ '--interval': intervalSeconds + 's' }"
+    :style="{ '--interval': intervalSeconds + 's' }"
     @keyup.space.prevent="toggleStart"
     tabindex="-1"
   >
-    <form
+    <div
       :class="{ dim: started }"
-      class="controls card-body row justify-content-end align-items-center mt-3 rounded"
+      class="controls mt-3 rounded grid align-items p-2 grid grid-flow-col auto-cols-max justify-between"
     >
       <div
-        class="col fade-in time-elapsed hide-on-dim"
+        class="fade-in time-elapsed hide-on-dim"
         v-if="started"
         aria-live="polite"
       >
@@ -27,21 +27,22 @@
         </div>
       </div>
 
-      <div class="col-md-3 hide-on-dim">
+      <div class="hide-on-dim">
         <div class="form-check">
           <input
             v-model="audio.enabled"
+            @change="toggleAudio"
             type="checkbox"
             class="form-check-input"
             id="audio-control"
           />
-          <label for="audio-control" class="form-check-label"
-            >Enable audio</label
-          >
+          <label for="audio-control" class="form-check-label">
+            Enable audio
+          </label>
         </div>
       </div>
 
-      <div class="col-md-3 hide-on-dim">
+      <div class="hide-on-dim">
         <div class="form-group">
           <label for="speed-control">
             Cycle length ({{ intervalSeconds }}s)
@@ -57,29 +58,27 @@
         </div>
       </div>
 
-      <div class="col-md-3">
+      <div class="button-container">
         <button
           type="button"
           title="Click or press the spacebar to begin"
-          class="w-100 font-weight-bold d-block btn btn-lg btn-outline-light"
+          class="start-stop font-semibold py-2 px-4 rounded"
           v-on:click="toggleStart()"
         >
-          <span v-if="started">Stop</span>
-          <span v-if="!started">Start</span>
+          <span v-if="started">stop</span>
+          <span v-if="!started">start</span>
         </button>
       </div>
-    </form>
+    </div>
 
     <article class="color-ball-parent" v-if="started">
-      <div class="col-12">
-        <div class="color-ball"></div>
-      </div>
+      <div class="color-ball"></div>
     </article>
   </main>
 </template>
 
 <script type="typescript">
-import { defineComponent, watch, toRefs, reactive } from "vue";
+import { defineComponent, toRefs, reactive } from "vue";
 
 export default defineComponent({
   name: "App",
@@ -95,10 +94,13 @@ export default defineComponent({
       audio: {
         enabled: true,
         active: false,
-        context: new (window.AudioContext || window.webkitAudioContext)(),
-        oscillator: undefined,
       },
     });
+    
+    const audioService = {
+      context: new (window.AudioContext || window.webkitAudioContext)(),
+      oscillator: undefined,
+    };
 
     const toggleStart = () => {
       state.started = !state.started;
@@ -115,6 +117,14 @@ export default defineComponent({
         if (state.audio.enabled) {
           stopAudio();
         }
+      }
+    };
+
+    const toggleAudio = () => {
+      if (state.audio.enabled) {
+        stopAudio();
+      } else if (state.started && !state.audio.active) {
+        startAudio();
       }
     };
 
@@ -138,60 +148,40 @@ export default defineComponent({
 
     const startAudio = () => {
       // create Oscillator node
-      state.audio.oscillator = state.audio.context.createOscillator();
+      audioService.oscillator = audioService.context.createOscillator();
 
-      state.audio.oscillator.type = "sine";
+      audioService.oscillator.type = "sine";
       // value in hertz
-      state.audio.oscillator.frequency.setValueAtTime(
+      audioService.oscillator.frequency.setValueAtTime(
         130,
-        state.audio.context.currentTime
+        audioService.context.currentTime
       );
-      state.audio.oscillator.connect(state.audio.context.destination);
-      state.audio.oscillator.start();
+      audioService.oscillator.connect(audioService.context.destination);
+      audioService.oscillator.start();
       state.audio.active = true;
     };
 
     const stopAudio = () => {
-      if (state.audio.oscillator) {
-        state.audio.oscillator.stop();
+      if (audioService.oscillator) {
+        audioService.oscillator.stop();
         state.audio.active = false;
+        delete audioService.oscillator;
       }
     };
-
-    // Pad numbers less than 10 with a leading zero.
-    const applyLeadingZero = (value) => (value < 10 ? `0${value}` : value);
-
-    watch("state.audio", (val) => {
-      if (!val) {
-        stopAudio();
-      } else if (state.started && !state.audio.active) {
-        startAudio();
-      }
-    });
 
     return {
       ...toRefs(state),
       toggleStart,
       startTimer,
       clearTimer,
-      startAudio,
-      stopAudio,
-      applyLeadingZero,
+      toggleAudio,
     };
   },
 });
 </script>
 
 <style lang="sass" scoped>
-@import '../node_modules/bootstrap/scss/bootstrap.scss'
-
-$animation-length: .5s
-
-body
-  background-color: #222
-  color: #fff
-  font-size: 14px
-  font-family: Helvetica, sans-serif
+@import 'sass/variables'
 
 @keyframes slide
   0%
@@ -224,6 +214,13 @@ main
     background: linear-gradient(320deg, rgba(167,140,233,1) 41%, rgba(175,110,213,1) 100%)
     transition: padding $animation-length
 
+    .button-container
+      .start-stop
+        background-color: $blush
+        transition: background-color $animation-length
+        &:hover, &:active, &:focus
+          background-color: darken($blush, 10%)
+
     .time-elapsed .time
       font-size: 1.1em
       line-height: 1.5
@@ -248,12 +245,12 @@ main
 
 .color-ball-parent
   position: relative
-
-.color-ball
-  position: absolute
-  background-color: #68d4f8
-  width: 12em
-  height: 12em
-  border-radius: 50%
-  animation: slide var(--interval) infinite ease-in-out
+  margin: auto 0
+  .color-ball
+    position: absolute
+    background-color: #68d4f8
+    width: 12em
+    height: 12em
+    border-radius: 50%
+    animation: slide var(--interval) infinite ease-in-out
 </style>
